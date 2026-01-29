@@ -1,162 +1,42 @@
-// Client-side RPC calls - bypass serverless functions
-export const CHAINS: any = {
-  1: { 
-    name: 'Ethereum', 
-    symbol: 'ETH',
-    rpcs: [
-      'https://eth.llamarpc.com',
-      'https://rpc.ankr.com/eth',
-      'https://ethereum.publicnode.com'
-    ]
-  },
-  137: { 
-    name: 'Polygon', 
-    symbol: 'MATIC',
-    rpcs: [
-      'https://polygon.llamarpc.com',
-      'https://rpc.ankr.com/polygon',
-      'https://polygon-rpc.com'
-    ]
-  },
-  42161: { 
-    name: 'Arbitrum', 
-    symbol: 'ETH',
-    rpcs: [
-      'https://arbitrum.llamarpc.com',
-      'https://rpc.ankr.com/arbitrum',
-      'https://arb1.arbitrum.io/rpc'
-    ]
-  },
-  10: { 
-    name: 'Optimism', 
-    symbol: 'ETH',
-    rpcs: [
-      'https://optimism.llamarpc.com',
-      'https://rpc.ankr.com/optimism',
-      'https://mainnet.optimism.io'
-    ]
-  },
-  8453: { 
-    name: 'Base', 
-    symbol: 'ETH',
-    rpcs: [
-      'https://base.llamarpc.com',
-      'https://mainnet.base.org',
-      'https://base.publicnode.com'
-    ]
-  },
-  56: { 
-    name: 'BSC', 
-    symbol: 'BNB',
-    rpcs: [
-      'https://bsc-dataseed.binance.org',
-      'https://bsc.publicnode.com',
-      'https://rpc.ankr.com/bsc'
-    ]
-  },
-  43114: { 
-    name: 'Avalanche', 
-    symbol: 'AVAX',
-    rpcs: [
-      'https://api.avax.network/ext/bc/C/rpc',
-      'https://avalanche.publicnode.com',
-      'https://rpc.ankr.com/avalanche'
-    ]
-  },
-  59144: { 
-    name: 'Linea', 
-    symbol: 'ETH',
-    rpcs: [
-      'https://rpc.linea.build',
-      'https://linea.drpc.org'
-    ]
-  },
-  534352: { 
-    name: 'Scroll', 
-    symbol: 'ETH',
-    rpcs: [
-      'https://rpc.scroll.io',
-      'https://scroll.drpc.org'
-    ]
-  },
-  1088: { 
-    name: 'Metis', 
-    symbol: 'METIS',
-    rpcs: [
-      'https://andromeda.metis.io/?owner=1088'
-    ]
-  }
+export const CHAINS = [
+  { id: 1, name: 'Ethereum', symbol: 'ETH', logo: '🔷', color: '#627EEA' },
+  { id: 137, name: 'Polygon', symbol: 'MATIC', logo: '#8247E5', color: '#8247E5' },
+  { id: 42161, name: 'Arbitrum', symbol: 'ARB', logo: '#28A0F0', color: '#28A0F0' },
+  { id: 10, name: 'Optimism', symbol: 'OP', logo: '#FF0420', color: '#FF0420' },
+  { id: 8453, name: 'Base', symbol: 'BASE', logo: '#0052FF', color: '#0052FF' },
+  { id: 56, name: 'BSC', symbol: 'BNB', logo: '#F3BA2F', color: '#F3BA2F' },
+  { id: 43114, name: 'Avalanche', symbol: 'AVAX', logo: '#E84142', color: '#E84142' },
+  { id: 59144, name: 'Linea', symbol: 'ETH', logo: '#61DFFF', color: '#61DFFF' },
+  { id: 534352, name: 'Scroll', symbol: 'ETH', logo: '#FFEEDA', color: '#E5D4B0' },
+  { id: 1088, name: 'Metis', symbol: 'METIS', logo: '#00CFFF', color: '#00CFFF' }
+];
+
+const RPCS: any = {
+  1: ['https://eth.llamarpc.com', 'https://rpc.ankr.com/eth'],
+  137: ['https://polygon.llamarpc.com', 'https://polygon-rpc.com'],
+  42161: ['https://arbitrum.llamarpc.com', 'https://arb1.arbitrum.io/rpc'],
+  10: ['https://optimism.llamarpc.com', 'https://mainnet.optimism.io'],
+  8453: ['https://base.llamarpc.com', 'https://mainnet.base.org'],
+  56: ['https://bsc-dataseed.binance.org', 'https://bsc.publicnode.com'],
+  43114: ['https://api.avax.network/ext/bc/C/rpc'],
+  59144: ['https://rpc.linea.build'],
+  534352: ['https://rpc.scroll.io'],
+  1088: ['https://andromeda.metis.io/?owner=1088']
 };
 
-// Fungsi fetch dengan fallback RPC
-export async function fetchWithFallback(chainId: number, method: string, params: any[]) {
-  const chain = CHAINS[chainId];
-  if (!chain) throw new Error('Chain not supported');
-
-  const payload = {
-    jsonrpc: '2.0',
-    method: method,
-    params: params,
-    id: Date.now()
-  };
-
-  // Coba tiap RPC sampai berhasil
-  for (const rpc of chain.rpcs) {
+export async function fetchRPC(chainId: number, method: string, params: any[]) {
+  const urls = RPCS[chainId] || [];
+  
+  for (const url of urls) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000); // 5 detik timeout per RPC
-      
-      const res = await fetch(rpc, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+        body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 })
       });
-      
-      clearTimeout(timeout);
-      
-      if (!res.ok) continue;
-      
       const data = await res.json();
-      if (data.error) continue;
-      
-      return data.result;
-    } catch (e) {
-      console.log(`RPC ${rpc} failed, trying next...`);
-      continue;
-    }
+      if (data.result) return data.result;
+    } catch (e) {}
   }
-  
-  throw new Error('All RPCs failed for chain ' + chainId);
-}
-
-// Fungsi utama untuk analyze address
-export async function analyzeAddress(address: string, chainId: number) {
-  const [balance, txCount] = await Promise.all([
-    fetchWithFallback(chainId, 'eth_getBalance', [address, 'latest']),
-    fetchWithFallback(chainId, 'eth_getTransactionCount', [address, 'latest'])
-  ]);
-
-  // Convert hex ke decimal
-  const balanceEth = parseInt(balance, 16) / 1e18;
-  const txCountNum = parseInt(txCount, 16);
-  
-  const chain = CHAINS[chainId];
-  const gasSpent = txCountNum * (chainId === 1 ? 0.005 : 0.001);
-  const score = Math.min(Math.floor((txCountNum / 100) * 50) + Math.min(txCountNum * 0.5, 50), 100);
-
-  return {
-    success: true,
-    address,
-    chainId,
-    chainName: chain.name,
-    symbol: chain.symbol,
-    balance: balanceEth.toFixed(4),
-    txCount: txCountNum,
-    gasSpent: gasSpent.toFixed(4),
-    activeDaysEstimate: Math.min(txCountNum * 2, 365),
-    contractInteractions: Math.floor(txCountNum * 0.3),
-    airdropScore: score,
-    timestamp: new Date().toISOString()
-  };
+  throw new Error('RPC failed');
 }
