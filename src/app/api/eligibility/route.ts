@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { EligibilityChecker, checkDeBank, checkAirdropContracts } from '@/lib/providers/eligibility';
+import { EligibilityChecker, checkAirdropContracts, EligibilityResult } from '@/lib/providers/eligibility';
 import { MOCK_ELIGIBILITY_DB } from '@/lib/db/airdrops';
+
+interface OnChainMetrics {
+  nonce: number;
+  activity: 'high' | 'low' | 'unknown';
+}
+
+interface PredictedAirdrop {
+  name: string;
+  confidence: number;
+  estAmount: string;
+  reason: string;
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,9 +25,8 @@ export async function GET(req: NextRequest) {
   const checker = new EligibilityChecker();
   
   // Parallel check semua source
-  const [protocolAirdrops, existingTokens, oldContracts] = await Promise.all([
+  const [protocolAirdrops, oldContracts] = await Promise.all([
     checker.checkAll(address),
-    checkDeBank(address),
     checkAirdropContracts(address)
   ]);
   
@@ -23,10 +34,10 @@ export async function GET(req: NextRequest) {
   const mockData = MOCK_ELIGIBILITY_DB[address] || [];
   
   // Merge semua results
-  const allAirdrops = [
+  const allAirdrops: EligibilityResult[] = [
     ...protocolAirdrops,
     ...oldContracts,
-    ...mockData.map((m: any) => ({
+    ...mockData.map((m) => ({
       name: m.protocol,
       amount: m.amount,
       status: m.status,
@@ -47,9 +58,9 @@ export async function GET(req: NextRequest) {
     address,
     timestamp: new Date().toISOString(),
     summary: {
-      totalClaimable: allAirdrops.filter((a: any) => a.status === 'claimable').length,
-      totalPending: allAirdrops.filter((a: any) => a.status === 'pending').length,
-      totalValue: allAirdrops.reduce((sum: number, a: any) => sum + (parseFloat(a.amount) || 0), 0)
+      totalClaimable: allAirdrops.filter((a) => a.status === 'claimable').length,
+      totalPending: allAirdrops.filter((a) => a.status === 'pending').length,
+      totalValue: allAirdrops.reduce((sum, a) => sum + (parseFloat(String(a.amount ?? 0)) || 0), 0)
     },
     airdrops: allAirdrops,
     predictions, // Airdrop yang diprediksi bakal datang
@@ -57,7 +68,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function getOnChainMetrics(address: string) {
+async function getOnChainMetrics(address: string): Promise<OnChainMetrics> {
   // Fetch basic metrics dari ETH mainnet
   try {
     const res = await fetch('https://eth.llamarpc.com', {
@@ -70,18 +81,21 @@ async function getOnChainMetrics(address: string) {
         id: 1
       })
     });
-    const data = await res.json();
+    const data: { result?: string } = await res.json();
+    const txCountHex = data.result ?? '0x0';
+    const nonce = parseInt(txCountHex, 16);
+
     return {
-      nonce: parseInt(data.result, 16),
-      activity: parseInt(data.result, 16) > 10 ? 'high' : 'low'
+      nonce,
+      activity: nonce > 10 ? 'high' : 'low'
     };
-  } catch (e) {
+  } catch {
     return { nonce: 0, activity: 'unknown' };
   }
 }
 
-function predictAirdrops(metrics: any) {
-  const predictions = [];
+function predictAirdrops(metrics: OnChainMetrics): PredictedAirdrop[] {
+  const predictions: PredictedAirdrop[] = [];
   
   // Heuristic sederhana
   if (metrics.nonce > 50) {
