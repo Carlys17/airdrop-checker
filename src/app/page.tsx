@@ -3,10 +3,38 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface AirdropItem {
+  name: string;
+  ticker?: string;
+  icon?: string;
+  amount?: number | string;
+  status?: 'claimable' | 'pending';
+  claimUrl?: string;
+}
+
+interface PredictionItem {
+  name: string;
+  confidence: number;
+  estAmount: string;
+  reason: string;
+}
+
+interface EligibilityResponse {
+  address: string;
+  summary: {
+    totalValue: number;
+  };
+  airdrops: AirdropItem[];
+  predictions: PredictionItem[];
+  metrics: {
+    nonce: number;
+  };
+}
+
 export default function DropsClone() {
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<EligibilityResponse | null>(null);
   const [error, setError] = useState('');
 
   const checkEligibility = async () => {
@@ -20,12 +48,15 @@ export default function DropsClone() {
     
     try {
       const res = await fetch(`/api/eligibility?address=${address}`);
-      const data = await res.json();
+      const data: EligibilityResponse | { error?: string } = await res.json();
       
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to check');
+      if (!res.ok) {
+        throw new Error('error' in data ? data.error : 'Failed to check');
+      }
+
+      setResult(data as EligibilityResponse);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to check');
     } finally {
       setLoading(false);
     }
@@ -140,7 +171,7 @@ export default function DropsClone() {
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Claimable Airdrops</h2>
               
               <AnimatePresence>
-                {result.airdrops.map((drop: any, idx: number) => (
+                {result.airdrops.map((drop, idx: number) => (
                   <motion.div
                     key={idx}
                     initial={{ opacity: 0, y: 20 }}
@@ -197,7 +228,7 @@ export default function DropsClone() {
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Potential</h2>
               <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-                {result.predictions.map((pred: any, idx: number) => (
+                {result.predictions.map((pred, idx: number) => (
                   <div key={idx} className="mb-4 pb-4 border-b border-gray-200 last:border-0">
                     <div className="flex justify-between items-center mb-1">
                       <span className="font-semibold text-gray-900">{pred.name}</span>
