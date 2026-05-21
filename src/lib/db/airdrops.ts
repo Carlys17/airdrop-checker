@@ -1,5 +1,29 @@
+export interface AirdropProtocol {
+  id: string;
+  name: string;
+  ticker: string;
+  status: 'active' | 'claimable' | 'pending';
+  claimUrl?: string;
+  checker: 'api' | 'contract' | 'rpc';
+  endpoint?: string;
+  responsePath?: string;
+  estimateField?: string;
+  contract?: string;
+  merkleRoot?: string;
+  method?: string;
+  icon?: string;
+  deadline?: string;
+  color?: string;
+}
+
+export interface MockEligibilityEntry {
+  protocol: string;
+  amount: number;
+  status: 'claimable' | 'pending';
+}
+
 // List airdrop REAL yang sedang bisa di-check (update manual/test有的放矢)
-export const ACTIVE_AIRDROP_PROTOCOLS = [
+export const ACTIVE_AIRDROP_PROTOCOLS: AirdropProtocol[] = [
   {
     id: 'linea-voyage',
     name: 'Linea Voyage',
@@ -34,7 +58,7 @@ export const ACTIVE_AIRDROP_PROTOCOLS = [
 ];
 
 // Mock database untuk simulasi (kalo belum ada API real)
-export const MOCK_ELIGIBILITY_DB: Record<string, any[]> = {
+export const MOCK_ELIGIBILITY_DB: Record<string, MockEligibilityEntry[]> = {
   // Address -> Array of eligible airdrops
   '0x1691565c9E5846b348Bf21707521e492614df376': [
     { protocol: 'Linea', amount: 2500, status: 'claimable' },

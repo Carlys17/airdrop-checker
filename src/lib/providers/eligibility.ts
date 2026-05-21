@@ -1,8 +1,21 @@
-import { ACTIVE_AIRDROP_PROTOCOLS } from '../db/airdrops';
+import { ACTIVE_AIRDROP_PROTOCOLS, AirdropProtocol } from '../db/airdrops';
+
+export interface EligibilityResult {
+  name: string;
+  ticker?: string;
+  icon?: string;
+  eligible: boolean;
+  amount?: number | string;
+  claimUrl?: string;
+  deadline?: string;
+  color?: string;
+  status?: 'claimable' | 'pending';
+  type?: 'token_balance';
+}
 
 export class EligibilityChecker {
   async checkAll(address: string) {
-    const results = [];
+    const results: EligibilityResult[] = [];
     
     for (const protocol of ACTIVE_AIRDROP_PROTOCOLS) {
       try {
@@ -16,7 +29,7 @@ export class EligibilityChecker {
     return results;
   }
   
-  async checkProtocol(address: string, protocol: any) {
+  async checkProtocol(address: string, protocol: AirdropProtocol): Promise<EligibilityResult> {
     switch (protocol.checker) {
       case 'api':
         return this.checkViaAPI(address, protocol);
@@ -29,10 +42,14 @@ export class EligibilityChecker {
     }
   }
   
-  async checkViaAPI(address: string, protocol: any) {
+  async checkViaAPI(address: string, protocol: AirdropProtocol): Promise<EligibilityResult> {
+    if (!protocol.endpoint || !protocol.responsePath) {
+      return { name: protocol.name, eligible: false };
+    }
+
     const url = protocol.endpoint.replace('{address}', address);
     const res = await fetch(url);
-    const data = await res.json();
+    const data: unknown = await res.json();
     
     const isEligible = this.getValueByPath(data, protocol.responsePath) === 1 || 
                       this.getValueByPath(data, protocol.responsePath) === true;
@@ -42,14 +59,14 @@ export class EligibilityChecker {
       ticker: protocol.ticker,
       icon: protocol.icon || '🪂',
       eligible: isEligible,
-      amount: this.getValueByPath(data, protocol.estimateField) || 'TBA',
+      amount: (protocol.estimateField && this.getValueByPath(data, protocol.estimateField)) || 'TBA',
       claimUrl: protocol.claimUrl,
       deadline: protocol.deadline,
       color: protocol.color || 'from-purple-500 to-pink-500'
     };
   }
   
-  async checkViaContract(address: string, protocol: any) {
+  async checkViaContract(_address: string, protocol: AirdropProtocol): Promise<EligibilityResult> {
     // Implementasi ethers.js read contract
     // Contoh: check merkle proof atau balance claimable
     
@@ -61,7 +78,7 @@ export class EligibilityChecker {
     };
   }
   
-  async checkViaRPC(address: string, protocol: any) {
+  async checkViaRPC(_address: string, protocol: AirdropProtocol): Promise<EligibilityResult> {
     // Direct RPC call ke contract
     return {
       name: protocol.name,
@@ -69,8 +86,14 @@ export class EligibilityChecker {
     };
   }
   
-  getValueByPath(obj: any, path: string) {
-    return path.split('.').reduce((o, p) => o?.[p], obj);
+  getValueByPath(obj: unknown, path: string): unknown {
+    return path.split('.').reduce<unknown>((current, key) => {
+      if (typeof current === 'object' && current !== null && key in current) {
+        return (current as Record<string, unknown>)[key];
+      }
+
+      return undefined;
+    }, obj);
   }
 }
 
@@ -84,7 +107,7 @@ export async function checkDeBank(address: string) {
     
     // Extract token list untuk detect airdrop tokens
     return data.data?.tokens || [];
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -98,13 +121,13 @@ export async function checkAirdropContracts(address: string) {
     // Tambahkan kontrak airdrop lain yang known
   ];
   
-  const results = [];
+  const results: EligibilityResult[] = [];
   
-  for (constairdrop of contracts) {
+  for (const airdrop of contracts) {
     try {
       // RPC call untuk check balance
       const rpcUrl = 'https://eth.llamarpc.com';
-      const data = await fetch(rpcUrl, {
+      const data: { result?: string } = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,7 +150,7 @@ export async function checkAirdropContracts(address: string) {
           type: 'token_balance'
         });
       }
-    } catch (e) {}
+    } catch {}
   }
   
   return results;
